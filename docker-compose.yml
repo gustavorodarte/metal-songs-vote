@@ -1,0 +1,106 @@
+version: '3.3'
+
+volumes:
+  postgres-data:
+    driver: local
+  gems-data:
+    driver: local
+
+services:
+  base: &base
+    hostname: base
+    ports: []
+    build:
+      context: .
+      dockerfile: dev.Dockerfile
+    volumes:
+      - .:/home/app/web
+      - gems-data:/home/app/.gems
+    environment: &env
+      USER_ID: ${UID}
+      SWAGGER_USER: 'zrp'
+      SWAGGER_PASSWORD: 'zrp@1234'
+      SWAGGER_HOST: 'localhost'
+      SQS_ENDPOINT: http://sqs:9324
+      MAILER_QUEUE: 'development_mailers'
+      EMAIL_FROM: 'zrp@zrp.com.br'
+      DATABASE_URL: postgres://postgres:zrp1234@db:5432/metal_songs
+      RACK_ENV: development
+      RAILS_ENV: development
+      SECRET_KEY_BASE: 1234
+      WEB_CONCURRENCY: 1
+      MAX_THREADS: 4
+      PORT: 3000
+      FORCE_NOTIFY: null
+      RAILS_SERVE_STATIC_FILES: null
+      CDN_HOST: 'localhost'
+      MAILER_HOST: 'localhost'
+      SHORYUKEN_PREFIX: 'development'
+      RAILS_LOG_TO_STDOUT: 'true'
+      MAILER_ASSETS_HOST: 'https://staging.manupa.zrp.com.br'
+      SMTP_ADDRESS: 'localhost'
+      SMTP_PORT: '1025'
+      SMTP_USERNAME: 'zrp'
+      SMTP_PASSWORD: 'zrp@zrp.com.br'
+    depends_on:
+      - db
+      - sqs
+      - mailcatcher
+    stdin_open: true
+    tty: true
+
+  app:
+    <<: *base
+    hostname: app
+    environment: *env
+    command: bundle exec rails server -p 3000 -b 0.0.0.0
+    ports: ['80:3000']
+
+  db:
+    hostname: db
+    image: postgres:9.5.10-alpine
+    volumes:
+      - ./db/dumps:/db/dumps
+      - ./tmp:/tmp
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: zrp1234
+
+  mailcatcher:
+    hostname: mailcatcher
+    image: schickling/mailcatcher
+    ports: ['1080:1080']
+
+  guard:
+    <<: *base
+    command: /bin/ash -c "bundle exec rails db:test:prepare && bundle exec guard start --no-bundler-warning --no-interactions"
+    environment:
+      <<: *env
+      DATABASE_URL: postgres://postgres:zrp1234@db:5432/wl_auth_test
+      RACK_ENV: test
+      RAILS_ENV: test
+      MAILER_QUEUE: 'test_mailers'
+      SHORYUKEN_PREFIX: 'test'
+
+  specs:
+    <<: *base
+    command: /bin/ash -c "bundle exec rails db:test:prepare && bundle exec rspec spec"
+    environment:
+      <<: *env
+      DATABASE_URL: postgres://postgres:zrp1234@db:5432/wl_auth_test
+      RACK_ENV: test
+      RAILS_ENV: test
+      MAILER_QUEUE: 'test_mailers'
+      SHORYUKEN_PREFIX: 'test'
+
+  shoryuken:
+    <<: *base
+    hostname: shoryuken
+    command:  bundle exec shoryuken --rails -C config/shoryuken.yml
+    environment: *env
+
+  sqs:
+    hostname: sqs
+    image: lightspeedretail/fake-sqs
+    ports:
+      - "9324:9324"
