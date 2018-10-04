@@ -1,10 +1,10 @@
 # defines a new GraphQL type
-Types::SongType = GraphQL::ObjectType.define do
+Types::UserType = GraphQL::ObjectType.define do
   # this type is named `Song`
-  name 'Song'
+  name 'User'
 
   # it has the following fields
   field :id, !types.ID
   field :name, !types.String
-  field :band, !types.String
+  field :email, !types.String
 end
